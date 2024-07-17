@@ -2,18 +2,24 @@
 
 ## Installing
 
-The tutorials are using CNCF Jaeger (https://github.com/jaegertracing/jaeger) as the tracing backend, 
-[see here](../README.md) how to install it in a Docker image.
+These tutorials can be followed using any following tracing backends:
+* [Signoz](https://signoz.io/)
+* [Tempo with Grafana](https://grafana.com/docs/tempo/latest/)
+* [Jaeger](https://jaegertracing.io)
 
-This repository uses [virtualenv](https://pypi.python.org/pypi/virtualenv) and `pip` to manage dependencies.
-To install all dependencies, run:
+Refer to this [guide](../README.md) to learn how to set up and run any of the above tracing backends.
 
-```
-cd opentracing-tutorial/python
-virtualenv env
-source env/bin/activate
-pip install -r requirements.txt
-```
+This repository uses `pip` to manage dependencies. To install all dependencies, run:
+
+* Navigate to the tutorial directory:
+  ```
+  cd opentelemetry-tutorial/python
+  ```
+* Activate your virtual environment.
+* Install the required dependencies:
+  ```
+  pip install -r requirements.txt
+  ```
 
 All subsequent commands in the tutorials should be executed relative to this `python` directory.
 
@@ -34,5 +40,3 @@ All subsequent commands in the tutorials should be executed relative to this `py
 * [Lesson 04 - Baggage](./lesson04)
   * Understand distributed context propagation
   * Use baggage to pass data through the call graph
-* [Extra Credit](./extracredit)
-  * Use existing open source instrumentation

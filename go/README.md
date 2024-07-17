@@ -2,27 +2,15 @@
 
 ## Installing
 
-The tutorials are using CNCF Jaeger (https://github.com/jaegertracing/jaeger) as the tracing backend, 
-[see here](../README.md) how to install it in a Docker image.
+These tutorials can be followed using any following tracing backends:
+* [Signoz](https://signoz.io/)
+* [Tempo with Grafana](https://grafana.com/docs/tempo/latest/)
+* [Jaeger](https://jaegertracing.io)
 
-This repository uses Go's new [`dep`](https://github.com/golang/dep) tool to manage dependencies (installed automatically below).
+Refer to this [guide](../README.md) to learn how to set up and run any of the above tracing backends.
 
-When you clone the tutorials repository, it should be located in the right place under `$GOPATH`:
 
-```
-mkdir -p $GOPATH/src/github.com/yurishkuro/
-cd $GOPATH/src/github.com/yurishkuro/
-git clone https://github.com/yurishkuro/opentracing-tutorial.git opentracing-tutorial
-```
-
-After that, install the dependencies:
-
-```
-cd $GOPATH/src/github.com/yurishkuro/opentracing-tutorial/go
-make install
-```
-
-The rest of the commands in the Go tutorials should be executed relative to this directory.
+All subsequent commands in the tutorials should be executed relative to this `go` directory.
 
 ## Lessons
 
@@ -41,5 +29,3 @@ The rest of the commands in the Go tutorials should be executed relative to this
 * [Lesson 04 - Baggage](./lesson04)
   * Understand distributed context propagation
   * Use baggage to pass data through the call graph
-* [Extra Credit](./extracredit)
-  * Use existing open source instrumentation

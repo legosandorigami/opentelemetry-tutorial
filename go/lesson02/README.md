@@ -14,169 +14,148 @@ First, copy your work or the official solution from [Lesson 1](../lesson01) to `
 
 ### Tracing individual functions
 
-In [Lesson 1](../lesson01) we wrote a program that creates a trace that consists of a single span.
-That single span combined two operations performed by the program, formatting the output string
-and printing it. Let's move those operations into standalone functions first:
+In [Lesson 1](../lesson01) we wrote a program that creates a trace that consists of a single span. That single span combined two operations performed by the program, formatting the output string and printing it. Let's move those operations into standalone functions first:
 
 ```go
-span := tracer.StartSpan("say-hello")
-span.SetTag("hello-to", helloTo)
-defer span.Finish()
+_, span := tracer.Start(ctx, "say-hello")
+span.SetAttributes(attribute.String("hello-to", helloTo))
+defer span.End()
 
+// calling `formatString` function with the span
 helloStr := formatString(span, helloTo)
+
+// calling `printHello` function with the span
 printHello(span, helloStr)
 ```
 
 and the functions:
 
 ```go
-func formatString(span opentracing.Span, helloTo string) string {
+// Function to format the greeting string
+func formatString(span trace.Span, helloTo string) string {
     helloStr := fmt.Sprintf("Hello, %s!", helloTo)
-    span.LogFields(
-        log.String("event", "string-format"),
-        log.String("value", helloStr),
-    )
+    
+    // Add an event to the span with a timestamp
+    span.AddEvent("event",
+		trace.WithAttributes(attribute.String("string-format", helloStr)), trace.WithTimestamp(time.Now()))
 
     return helloStr
 }
 
-func printHello(span opentracing.Span, helloStr string) {
+
+// Function to print the greeting string
+func printHello(span trace.Span, helloStr string) {
     println(helloStr)
-    span.LogKV("event", "println")
+
+    // Add an event to the span with a timestamp
+	span.AddEvent("event",
+		trace.WithAttributes(attribute.String("println", helloStr)), trace.WithTimestamp(time.Now()))
 }
 ```
 
 Of course, this does not change the outcome. What we really want to do is to wrap each function into its own span.
 
+### Wrapping Each Function in Its Own Span
+
+To track the execution of individual functions as separate spans, we need start a new span in each of the functions. Let's modigy the functions as follows:
+
 ```go
-func formatString(rootSpan opentracing.Span, helloTo string) string {
-    span := rootSpan.Tracer().StartSpan("formatString")
-    defer span.Finish()
+// Function to format the greeting string
+func formatString(ctx context.Context, helloTo string) string {
+	// Retrieve or create a named tracer.
+	tracer := otel.Tracer("say-hello-tracer")
 
-    helloStr := fmt.Sprintf("Hello, %s!", helloTo)
-    span.LogFields(
-        log.String("event", "string-format"),
-        log.String("value", helloStr),
-    )
+	// Start a new span named "formatString".
+	_, span := tracer.Start(ctx, "formatString")
+	defer span.End()
 
-    return helloStr
+	helloStr := fmt.Sprintf("Hello, %s!", helloTo)
+
+	// adding an event to the span.
+	span.AddEvent("event",
+		trace.WithAttributes(attribute.String("string-format", helloStr)), trace.WithTimestamp(time.Now()))
+
+	// printing the span contents
+	tracing.PrintSpanContents(span)
+
+	return helloStr
 }
 
-func printHello(rootSpan opentracing.Span, helloStr string) {
-    span := rootSpan.Tracer().StartSpan("printHello")
-    defer span.Finish()
+// Function to print the greeting string
+func printHello(ctx context.Context, helloStr string) {
+	// Retrieve or create a named tracer
+	tracer := otel.Tracer("say-hello-tracer")
 
-    println(helloStr)
-    span.LogKV("event", "println")
+	// Start a new span named "printHello"
+	_, span := tracer.Start(ctx, "printHello")
+	defer span.End()
+
+	println(helloStr)
+
+	// adding an event to the span.
+	span.AddEvent("event",
+		trace.WithAttributes(attribute.String("println", helloStr)), trace.WithTimestamp(time.Now()))
+
+	// printing the span contents
+	tracing.PrintSpanContents(span)
 }
 ```
+and the main function:
+
+```go
+// starting a new span named "say-hello"
+_, span := tracer.Start(ctx, "say-hello")
+span.SetAttributes(attribute.String("hello-to", helloTo))
+defer span.End()
+
+// calling `formatString` function with a background context
+helloStr := formatString(context.Background(), helloTo)
+
+// calling `printHello` function with a background context 
+printHello(context.Background(), helloStr)
+```
+
 
 Let's run it:
 
 ```
-$ go run ./lesson02/exercise/hello.go Bryan
-2017/09/24 14:56:04 Initializing logging reporter
-2017/09/24 14:56:04 Reporting span 292bd18774533232:292bd18774533232:0:1
-Hello, Bryan!
-2017/09/24 14:56:04 Reporting span 2004e24c3362725f:2004e24c3362725f:0:1
-2017/09/24 14:56:04 Reporting span 273d83da9cdc6413:273d83da9cdc6413:0:1
+$ go run ./lesson02/exercise/hello.go Brian
+2024/07/09 06:24:45 {"TraceID":"6c69832347b64cc1332d7aa6de1dcafb","SpanID":"b5a6927b2d576cdc","TraceFlags":"01","TraceState":"","Remote":false}
+Hello, Brian!
+2024/07/09 06:24:45 {"TraceID":"e983181b014bf5a143a9380a9ed1679a","SpanID":"a1b7d7bd75914c74","TraceFlags":"01","TraceState":"","Remote":false}
+2024/07/09 06:24:45 {"TraceID":"4d408919a64d6cbfa075ef73230c944e","SpanID":"a0d2b78892f808c8","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
-We got three spans, but there is a problem here. The first hexadecimal segment of the output represents
-Jaeger trace ID, yet they are all different. If we search for those IDs in the UI each one will represent
-a standalone trace with a single span. That's not what we wanted!
+We got three spans, but there is a problem here. The TraceIDs are all different. If we search for those IDs in the UI each one will represent a standalone trace with a single span. That's not what we wanted!
 
-What we really wanted was to establish causal relationship between the two new spans to the root
-span started in `main()`. We can do that by passing an additional option to the `StartSpan`
-function:
+### Establishing Parent-Child Relationship
+
+What we really wanted was to establish causal relationship between the two new spans to the root span started in `main`. We can do that by using the context that was returned when we called `tracer.Start` in the main function. This context includes the SpanContext of the parent span. Any new span created using this context will be a child of the parent span, inheriting its TraceID and establishing a parent-child relationship. So the main function needs to be updated to:
 
 ```go
-    span := rootSpan.Tracer().StartSpan(
-        "formatString",
-        opentracing.ChildOf(rootSpan.Context()),
-    )
-```
+// startin a new span named "say-hello" and getting the context
+ctx, span := tracer.Start(ctx, "say-hello")
+span.SetAttributes(attribute.String("hello-to", helloTo))
+defer span.End()
 
-If we think of the trace as a directed acyclic graph where nodes are the spans and edges are
-the causal relationships between them, then the `ChildOf` option is used to create one such
-edge between `span` and `rootSpan`. In the API the edges are represented by `SpanReference` type
-that consists of a `SpanContext` and a label. The `SpanContext` represents an immutable, thread-safe
-portion of the span that can be used to establish references or to propagate it over the wire.
-The label, or `ReferenceType`, describes the nature of the relationship. `ChildOf` relationship
-means that the `rootSpan` has a logical dependency on the child `span` before `rootSpan` can
-complete its operation. Another standard reference type in OpenTracing is `FollowsFrom`, which
-means the `rootSpan` is the ancestor in the DAG, but it does not depend on the completion of the
-child span, for example if the child represents a best-effort, fire-and-forget cache write.
-
-If we modify the `printHello` function accordingly and run the app, we'll see that all reported
-spans now belong to the same trace:
-
-```
-$ go run ./lesson02/exercise/hello.go Bryan
-2017/09/24 15:10:34 Initializing logging reporter
-2017/09/24 15:10:34 Reporting span 479fefe9525eddb:2a66575ec4945eef:479fefe9525eddb:1
-Hello, Bryan!
-2017/09/24 15:10:34 Reporting span 479fefe9525eddb:5adb976bfc1f95c1:479fefe9525eddb:1
-2017/09/24 15:10:34 Reporting span 479fefe9525eddb:479fefe9525eddb:0:1
-```
-
-We can also see that instead of `0` in the 3rd position the first two reported spans display
-`479fefe9525eddb`, which is the ID of the root span. The root span is reported last because
-it is the last one to finish.
-
-If we find this trace in the UI, it will show a proper parent-child relationship between the spans.
-
-### Propagate the in-process context
-
-You may have noticed one unpleasant side effect of our recent changes - we had to pass the Span object
-as the first argument to each function. Go language does not support the notion of thread-local variables,
-so in order to link the individual spans together we _do need to pass something_. We just don't want that
-to be the span object, since it pollutes the application with tracing code. The Go standard library has
-a type specifically designed for propagating request context throughout the application, called
-`context.Context`. In addition to handling things like deadlines and cancellations, the Context
-allows storing arbitrary key-value pairs, so we can use it to store the currently active span.
-The OpenTracing API integrates with `context.Context` and provides convenient helper functions.
-
-First we need to create the context in the `main()` function and store the span in it:
-
-```go
-ctx := context.Background()
-ctx = opentracing.ContextWithSpan(ctx, span)
-```
-
-Then we pass the `ctx` object instead of the `rootSpan`:
-
-```go
+// calling `formatString` function with the context "ctx"
 helloStr := formatString(ctx, helloTo)
+
+// calling `printHello` function with the context "ctx"
 printHello(ctx, helloStr)
 ```
 
-And we modify the functions to use `StartSpanFromContext` helper function:
+On running the app, we'll see that all reported spans now belong to the same trace:
 
-```go
-func formatString(ctx context.Context, helloTo string) string {
-    span, _ := opentracing.StartSpanFromContext(ctx, "formatString")
-    defer span.Finish()
-    ...
-
-func printHello(ctx context.Context, helloStr string) {
-    span, _ := opentracing.StartSpanFromContext(ctx, "printHello")
-    defer span.Finish()
-    ...
+```
+$ go run ./lesson02/exercise/hello.go Brian
+2024/07/09 06:29:02 {"TraceID":"d4631a54c578fd7644512d66e904e0c5","SpanID":"2597d8c8c39dc7f8","TraceFlags":"01","TraceState":"","Remote":false}
+Hello, Brian!
+2024/07/09 06:29:02 {"TraceID":"d4631a54c578fd7644512d66e904e0c5","SpanID":"8c37823820606d06","TraceFlags":"01","TraceState":"","Remote":false}
+2024/07/09 06:29:02 {"TraceID":"d4631a54c578fd7644512d66e904e0c5","SpanID":"2ed001eeb94e4653","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
-Note that we ignore the second value returned by the function, which is another instance of the Context
-with the new span stored in it. If our functions were calling more functions, we could keep that Context
-instance and pass it down, rather than passing the top-level context.
-
-And one last thing. The `StartSpanFromContext` function uses `opentracing.GlobalTracer()` to start the
-new spans, so we need to initialize that global variable to our instance of Jaeger tracer:
-
-```go
-tracer, closer := tracing.Init("hello-world")
-defer closer.Close()
-opentracing.SetGlobalTracer(tracer)
-```
+If we find this trace in the UI, it will show a proper parent-child relationship between the spans.
 
 ## Conclusion
 

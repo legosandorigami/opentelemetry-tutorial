@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
 	"fmt"
+	"log"
 	"os"
+	"time"
 
-	"github.com/opentracing/opentracing-go/log"
-	"github.com/yurishkuro/opentracing-tutorial/go/lib/tracing"
+	"github.com/legosandorigami/opentelemetry-tutorial/lib/tracing"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/trace"
 )
 
 func main() {
@@ -13,22 +17,42 @@ func main() {
 		panic("ERROR: Expecting one argument")
 	}
 
-	tracer, closer := tracing.Init("hello-world")
-	defer closer.Close()
+	// initializing the OpenTelemetry TracerProvider with the service name "hello-world"
+	tracerProvider, err := tracing.InitTracerProvider("hello-world")
+	if err != nil {
+		log.Fatalf("failed to create otel exporter: %v", err)
+	}
+
+	// creating a context and defering the shutdown of the TracerProvider to ensure proper cleanup
+	ctx := context.Background()
+	defer func() {
+		if err := tracerProvider.Shutdown(ctx); err != nil {
+			log.Fatalf("failed to shutdown TracerProvider: %v", err)
+		}
+	}()
+
+	// getting a tracer from the tracer provider
+	tracer := tracerProvider.Tracer("say-hello-tracer")
 
 	helloTo := os.Args[1]
 
-	span := tracer.StartSpan("say-hello")
-	span.SetTag("hello-to", helloTo)
+	// starting a new span named "say-hello"
+	ctx, span := tracer.Start(ctx, "say-hello")
+
+	// adding an attribute to the span
+	span.SetAttributes(attribute.String("hello-to", helloTo))
 
 	helloStr := fmt.Sprintf("Hello, %s!", helloTo)
-	span.LogFields(
-		log.String("event", "string-format"),
-		log.String("value", helloStr),
+
+	// adding logs to the span
+	span.AddEvent("event", trace.WithAttributes(attribute.String("println", fmt.Sprintf("string-format: %s", helloStr))),
+		trace.WithTimestamp(time.Now()),
 	)
 
 	println(helloStr)
-	span.LogKV("event", "println")
 
-	span.Finish()
+	tracing.PrintSpanContents(span)
+
+	// ending the span
+	span.End()
 }

@@ -7,9 +7,9 @@
 
 ### Walkthrough
 
-In Lesson 3 we have seen how span context is propagated over the wire between different applications. It is not hard to see that this process can be generalized to passing more than just the tracing context. With OpenTracing instrumentation in place, we can support general purpose _distributed context propagation_ where we associate some metadata with the transaction and make that metadata available anywhere in the distributed call graph. In OpenTracing this metadata is called _baggage_, to highlight the fact that it is carried over in-band with all RPC requests, just like baggage.
+In Lesson 3 we have seen how span context is propagated over the wire between different applications. It is not hard to see that this process can be generalized to passing more than just the tracing context. With OpenTelemetry instrumentation in place, we can support general purpose _distributed context propagation_ where we associate some metadata with the transaction and make that metadata available anywhere in the distributed call graph. In OpenTelemetry this metadata is called _baggage_, to highlight the fact that it is carried over in-band with all RPC requests, just like baggage.
 
-To see how it works in OpenTracing, let's take the application we built in Lesson 3. You can copy the source code from [../lesson03/solution](../lesson03/solution) package:
+To see how it works in OpenTelemetry, let's take the application we built in Lesson 3. You can copy the source code from [../lesson03/solution](../lesson03/solution) package:
 
 ```
 mkdir lesson04/exercise
@@ -20,42 +20,105 @@ The `formatter` service takes the `helloTo` parameter and returns a string `Hell
 
 ### Set Baggage in the Client
 
-Let's add/replace the following code to `hello.py`:
+Let's modify the function `main` in `hello.py` as follows:
 
 ```python
 assert len(sys.argv) == 3
-
-tracer = init_tracer('hello-world')
 
 hello_to = sys.argv[1]
 greeting = sys.argv[2]
 say_hello(hello_to, greeting)
 ```
-
-And update `sayHello`:
+And update `say_hello` function:
 
 ```python
 def say_hello(hello_to, greeting):
-    with tracer.start_active_span('say-hello') as scope:
-        scope.span.set_tag('hello-to', hello_to)
-        scope.span.set_baggage_item('greeting', greeting)
-        hello_str = format_string(hello_to)
-        print_hello(hello_str)
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'say_hello' operation
+    with tracer.start_as_current_span('say_hello') as span:
+        # setting an attribute on the span
+        span.set_attribute("hello-to", hello_to)
+        # calling the format_string function
+        hello_str = format_string(hello_to, {"greeting": greeting})
+        # calling the print_hello function
+        print_hello(hello_str)        
+        print(span.get_span_context())
 ```
-
-By doing this we read a second command line argument as a "greeting" and store it in the baggage under the `'greeting'` key.
-
-### Read Baggage in Formatter
-
-Change the following code in the `formatter`'s HTTP handler:
+Here we read a second command line argument as a "greeting". We also need to modify the signatures of the function `format_string` and `http_get` functions in `hello.py` so that they now also accept an additional argument of type python dictionary. The `http_get` function will be responsible for propagating the baggage items to the `Formatter` service. Let's modify the `format_string` and `http_get` functions in `hello.py` as follows:
 
 ```python
-with tracer.start_active_span('format', child_of=span_ctx, tags=span_tags) as scope:
-    greeting = scope.span.get_baggage_item('greeting')
-    if not greeting:
-        greeting = 'Hello'
-    hello_to = request.args.get('helloTo')
-    return '%s, %s!' % (greeting, hello_to)
+def format_string(hello_to, baggage_to_add: dict=None):
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'format_string' operation
+    with tracer.start_as_current_span('format_string') as span:
+        hello_str = http_get(8081, 'format', 'helloTo', hello_to, baggage_to_add)
+        # adding a log to the span indicating that 'string-format-event' event has occured
+        span.add_event('string-format-event', {'string-formatted': hello_str})
+        print(span.get_span_context())
+        return hello_str  
+```
+
+```python
+def http_get(port, path, param, value, baggage_to_add: dict = None):
+    url = 'http://localhost:%s/%s' % (port, path)
+    # retrieving the current active span
+    span = trace.get_current_span()
+    # setting HTTP method and URL attributes on the span
+    span.set_attribute(SpanAttributes.HTTP_METHOD, 'GET')
+    span.set_attribute(SpanAttributes.HTTP_URL, url)
+
+    # iniecting the span context into the HTTP headers for trace propagation
+    headers = {}
+    propagate.inject(headers)
+
+    # setting baggage to propagate custom data across span boundaries.
+    # Baggage items consist of a name, value, and context. The context is obtained from the current span scope
+    # and is automatically updated with the new baggage item by the OpenTelemetry SDK.
+    ctx = None
+    if baggage_to_add is not None and isinstance(baggage_to_add, dict):
+        for k, v in baggage_to_add.items():
+            ctx = baggage.set_baggage(name=k, value=v, context=ctx)
+    
+    # injecting the baggage into the request headers form the context ctx for baggage propagation
+    W3CBaggagePropagator().inject(headers, context=ctx)
+
+    # sending the HTTP GET request with the propagated headers
+    resp = requests.get(url, params={param: value}, headers=headers)
+    resp.raise_for_status()
+    return resp.text
+```
+
+`propagate.inject` only injects the trace context. To properly propagate baggage, we need to use the `W3CBaggagePropagator` in addition to the trace context propagator. 
+In the modified code for `http_get`, we first inject the trace context. Then, we check if there are any items to add to the baggage. If there are, we create a new baggage context containing these items and inject this new context into the request headers using `W3CBaggagePropagator`. 
+
+
+### Read Baggage in the Formatter Service
+
+Add the following code to the `formatter`'s HTTP handler in `formatter.py` file:
+
+```python
+# previous code
+
+# extracting the trace context from the request headers for distributed tracing
+trace_ctx = propagate.extract(carrier=request.headers)
+# extracting the baggage context from the request headers for distributed baggage propagation
+baggage_ctx = W3CBaggagePropagator().extract(carrier=request.headers)
+
+# starting a new span with the extracted trace context
+with tracer.start_as_current_span('format', context=trace_ctx) as span:
+
+    # previous code
+
+    # # retrieving the 'greeting' value from the baggage context
+    greeting = baggage.get_baggage("greeting",context=baggage_ctx)
+    if greeting is None:
+        greeting = "Hello"
+    hello_str = f"{greeting}, {hello_to}!"
+
+    # previous code
+
 ```
 
 ### Run it
@@ -64,36 +127,21 @@ As in Lesson 3, first start the `formatter` and `publisher` in separate terminal
 
 ```
 # client
-$ python -m lesson04.exercise.hello Bryan Bonjour
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x10c172f50>[app_name=hello-world]
-Starting new HTTP connection (1): localhost
-http://localhost:8081 "GET /format?helloTo=Bryan HTTP/1.1" 200 15
-Reporting span 1f5b4b5b21ea181d:821961d7d50eac1a:1f5b4b5b21ea181d:1 hello-world.format
-Starting new HTTP connection (1): localhost
-http://localhost:8082 "GET /publish?helloStr=Bonjour%2C+Bryan%21 HTTP/1.1" 200 9
-Reporting span 1f5b4b5b21ea181d:214e6b2fb3400125:1f5b4b5b21ea181d:1 hello-world.println
-Reporting span 1f5b4b5b21ea181d:1f5b4b5b21ea181d:0:1 hello-world.say-hello
+$ python -m lesson04.exercise.hello Brian Bonjour
+SpanContext(trace_id=0xee3ac40657648e0731bc66d31df8136f, span_id=0x04c15f877782773f, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0xee3ac40657648e0731bc66d31df8136f, span_id=0x2165ba180ff281f8, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0xee3ac40657648e0731bc66d31df8136f, span_id=0xa2019245569e2b88, trace_flags=0x01, trace_state=[], is_remote=False)
 
 # formatter
 $ python -m lesson04.exercise.formatter
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x10c7b0e90>[app_name=formatter]
- * Running on http://127.0.0.1:8081/ (Press CTRL+C to quit)
-Reporting span 1f5b4b5b21ea181d:821961d7d50eac1a:1f5b4b5b21ea181d:1 formatter.format
-127.0.0.1 - - [28/Sep/2017 23:35:04] "GET /format?helloTo=Bryan HTTP/1.1" 200 -
+SpanContext(trace_id=0xee3ac40657648e0731bc66d31df8136f, span_id=0xee49d176d752a844, trace_flags=0x01, trace_state=[], is_remote=False)
+127.0.0.1 - - [13/Jul/2024 14:02:17] "GET /format?helloTo=Brian HTTP/1.1" 200 -
 
 # publisher
 $ python -m lesson04.exercise.publisher
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x102c40e90>[app_name=publisher]
- * Running on http://127.0.0.1:8082/ (Press CTRL+C to quit)
-Bonjour, Bryan!
-Reporting span 1f5b4b5b21ea181d:214e6b2fb3400125:1f5b4b5b21ea181d:1 publisher.publish
-127.0.0.1 - - [28/Sep/2017 23:35:04] "GET /publish?helloStr=Bonjour%2C+Bryan%21 HTTP/1.1" 200 -
+Bonjour, Brian!
+SpanContext(trace_id=0xee3ac40657648e0731bc66d31df8136f, span_id=0xd8f41fc0eb6c5835, trace_flags=0x01, trace_state=[], is_remote=False)
+127.0.0.1 - - [13/Jul/2024 14:02:17] "GET /publish?helloStr=Bonjour,+Brian! HTTP/1.1" 200 -
 ```
 
 ### What's the Big Deal?
@@ -115,5 +163,3 @@ Of course, while baggage is an extremely powerful mechanism, it is also dangerou
 ## Conclusion
 
 The complete program can be found in the [solution](./solution) package.
-
-Extra Credit: [Using existing open source instrumentation](../extracredit).

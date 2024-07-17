@@ -12,10 +12,7 @@ Learn how to:
 
 ### Hello-World Microservice App
 
-To save you some typing, we are going to start this lesson with a partial solution
-available in the [exercise](./exercise) package. We are still working with the same
-Hello World application, except that the `format_string` and `print_hello` functions
-are now rewritten as RPC calls to two downstream services, `formatter` and `publisher`.
+To save you some typing, we are going to start this lesson with a partial solution available in the [exercise](./exercise) package. We are still working with the same Hello World application, except that the `format_string` and `print_hello` functions are now rewritten as RPC calls to two downstream services, `formatter` and `publisher`.
 The package is organized as follows:
 
   * `hello.py` is a copy from Lesson 2 modified to make HTTP calls
@@ -56,38 +53,24 @@ Finally, if we run the client app as we did in the previous lessons:
 
 ```
 $ python -m lesson03.exercise.hello Bryan
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x1065eae90>[app_name=hello-world]
-Starting new HTTP connection (1): localhost
-http://localhost:8081 "GET /format?helloTo=Bryan HTTP/1.1" 200 13
-Reporting span 54a7216ce30dc55f:7da1880708474f6b:54a7216ce30dc55f:1 hello-world.format
-Starting new HTTP connection (1): localhost
-http://localhost:8082 "GET /publish?helloStr=Hello%2C+Bryan%21 HTTP/1.1" 200 9
-Reporting span 54a7216ce30dc55f:e1f600c35cf37186:54a7216ce30dc55f:1 hello-world.println
-Reporting span 54a7216ce30dc55f:54a7216ce30dc55f:0:1 hello-world.say-hello
+SpanContext(trace_id=0x8993d6ee03c04f6c2ffa4a306c617745, span_id=0xfa46b40e24df5ddd, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0x8993d6ee03c04f6c2ffa4a306c617745, span_id=0x1312413b94ceb08a, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0x8993d6ee03c04f6c2ffa4a306c617745, span_id=0x3a272d14414b1069, trace_flags=0x01, trace_state=[], is_remote=False)
 ```
 
 We will see the `publisher` printing the line `"Hello, Bryan!"`.
 
 ### Inter-Process Context Propagation
 
-Since the only change we made in the `hello.py` app was to replace two operations with HTTP calls,
-the tracing story remains the same - we get a trace with three spans, all from `hello-world` service.
-But now we have two more microservices participating in the transaction and we want to see them
-in the trace as well. In order to continue the trace over the process boundaries and RPC calls,
-we need a way to propagate the span context over the wire. The OpenTracing API provides two functions
-in the Tracer interface to do that, `inject(spanContext, format, carrier)` and `extract(format, carrier)`.
+Since the only change we made in the `hello.py` app was to replace two operations with HTTP calls, the tracing story remains the same - we get a trace with three spans, all from `hello-world` service. But now we have two more microservices participating in the transaction and we want to see them in the trace as well. In order to continue the trace over the process boundaries and RPC calls, we need a way to propagate the span context over the wire. The OpenTelemetry API provides two functions in the `Tracer` interface to do that: `inject(carrier)` and `extract(carrier)`.
 
-The `format` parameter refers to one of the three standard encodings the OpenTracing API defines:
-  * `TEXT_MAP` where span context is encoded as a collection of string key-value pairs,
-  * `BINARY` where span context is encoded as an opaque byte array,
-  * `HTTP_HEADERS`, which is similar to `TEXT_MAP` except that the keys must be safe to be used as HTTP headers.
+The `carrier` parameter refers to the data structure used to carry the context across process boundaries. OpenTelemetry supports several formats for propagation, including:
+* `TextMapPropagator`, where the span context is encoded as a collection of string key-value pairs
+* `TraceContextTextMapPropagator`, based on the W3C Trace Context standard, which handles the propagation of both traces and baggage(We will learn about this propagator in the next lesson [Baggage](../lesson04)) by encoding context using standardized HTTP headers.
 
-The `carrier` is an abstraction over the underlying RPC framework. For example, a carrier for `TEXT_MAP`
-format is a dictionary, while a carrier for Binary format is `bytearray`.
+When using the `inject` method, you provide a Python dictionary as the `carrier`. However, `TraceContextTextMapPropagator` directly interacts with HTTP headers (e.g., `request.headers`). If using a Python dictionary for the `extract` method, ensure it includes a `get` function to correctly extract the items from the dictionary.
 
-The tracing instrumentation uses `inject` and `extract` to pass the span context through the RPC calls.
+Tracing instrumentation uses `inject` and `extract` to pass the span context through the RPC calls.
 
 ### Instrumenting the Client
 
@@ -95,42 +78,62 @@ In the `format_string` function we already create a child span. Since we call `t
 
 ```python
 def format_string(hello_to):
-    with tracer.start_active_span('format') as scope:
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'format_string' operation
+    with tracer.start_as_current_span('format_string') as span:
         hello_str = http_get(8081, 'format', 'helloTo', hello_to)
-        scope.span.log_kv({'event': 'string-format', 'value': hello_str})
-        return hello_str
+        # adding a log to the span indicating that 'string-format-event' event has occured
+        span.add_event('string-format-event', {'string-formatted': hello_str})
+        print(span.get_span_context())
+        return hello_str  
 ```
-
-Now let's change `http_get` function to actually inject the span into HTTP headers using `headers` dictionary:
+We need to add similar code to the `printHello` function. Now let's change `http_get` function to actually inject the span into HTTP headers using `headers` dictionary:
 
 ```python
 def http_get(port, path, param, value):
     url = 'http://localhost:%s/%s' % (port, path)
-
-    span = tracer.active_span
-    span.set_tag(tags.HTTP_METHOD, 'GET')
-    span.set_tag(tags.HTTP_URL, url)
-    span.set_tag(tags.SPAN_KIND, tags.SPAN_KIND_RPC_CLIENT)
+    # retrieving the current active span
+    span = trace.get_current_span()
+    # setting HTTP method and URL attributes on the span
+    span.set_attribute(SpanAttributes.HTTP_METHOD, 'GET')
+    span.set_attribute(SpanAttributes.HTTP_URL, url)
+    # Iniecting the span context into the HTTP headers for trace propagation
     headers = {}
-    tracer.inject(span, Format.HTTP_HEADERS, headers)
-
-    r = requests.get(url, params={param: value}, headers=headers)
-    assert r.status_code == 200
-    return r.text
+    propagate.inject(headers)
+    print(f"headers: {headers}")
+    # sending the HTTP GET request with the propagated headers
+    resp = requests.get(url, params={param: value}, headers=headers)
+    resp.raise_for_status()
+    return resp.text
 ```
 
-Notice that we also add a couple additional tags to the span with some metadata about the HTTP request,
-and we mark the span with a `span.kind=client` tag, as recommended by the OpenTracing
-[Semantic Conventions][semantic-conventions]. There are other tags we could add.
+Notice that we also add a couple additional tags to the span with some metadata about the HTTP request. There are other tags we could add.
 
 We are missing a couple imports:
 
 ```python
-from opentracing.ext import tags
-from opentracing.propagation import Format
+from opentelemetry import propagate
+from opentelemetry.semconv.trace import SpanAttributes
 ```
 
-You can rerun `hello.py` program now, but we won't see any difference.
+However, if we run this program, no context will be propagated because when we call `propagate.inject`, This function internally uses the global propagator to inject the current span context into the provided headers dictionary. The global propagator is no-op by default. We need to replace the default propagator with our custom one. To achieve this, we should update the `init_tracer_provider` function from our helper library as follows:
+
+#### Add an import
+
+```python
+from opentelemetry import propagate
+from opentelemetry.trace.propagation.tracecontext import TraceContextTextMapPropagator
+```
+
+#### Replace the global default `propagator` with an instance of `TraceContextPropagator`
+
+Add the following line at the end of the function
+
+```python
+# setting up a propagator to propagate traces and baggage accross microservices
+propagate.set_global_textmap(TraceContextTextMapPropagator())
+```
 
 ### Instrumenting the Servers
 
@@ -139,36 +142,41 @@ Our servers are currently not instrumented for tracing. We need to do the follow
 #### Add some imports
 
 ```python
-from lib.tracing import init_tracer
-from opentracing.ext import tags
-from opentracing.propagation import Format
+from opentelemetry import propagate, trace
+from opentelemetry.sdk.trace import TracerProvider, Tracer
+from lib.tracing import init_tracer_provider, UnsupportedBackendError
 ```
 
 #### Create an instance of a Tracer, similar to how we did it in `hello.py`
 
-Add a member variable and a constructor to the Formatter:
-
 ```python
-app = Flask(__name__)
-tracer = init_tracer('formatter')
+# retrieve the global tracer provider
+tracer_provider: TracerProvider = trace.get_tracer_provider()
+# obtain a tracer instance from the tracer provider
+tracer: Tracer = tracer_provider.get_tracer(tracer_name)
 ```
 
-#### Extract the span context from the incoming request using `tracer.extract`
-
-The logic here is similar to the client side instrumentation, except that we are using `tracer.extract`
-and tagging the span as `span.kind=server`.
+#### Extract the span context from the incoming request using the global `propagator` that was set when we called `init_tracer_provider` function in our helper library
 
 ```python
-@app.route("/format")
-def format():
-    span_ctx = tracer.extract(Format.HTTP_HEADERS, request.headers)
-    span_tags = {tags.SPAN_KIND: tags.SPAN_KIND_RPC_SERVER}
-    with tracer.start_active_span('format', child_of=span_ctx, tags=span_tags):
-        hello_to = request.args.get('helloTo')
-        return 'Hello, %s!' % hello_to
+  # extracting the span context from the request headers
+  ctx = propagate.extract(carrier=request.headers)
 ```
 
-Make a similar change in `publisher.py`. Note that we are still using `start_active_span` for consistency. In this example it does not make much of a difference, but if the logic in the formatter and publisher was more involved, we could benefit from propagating the span through thread locals.
+#### Start a new child span representing the work of the server
+Request headers contain the parent `Traceparent`. When using `propagate.extract` method, a new context is created containing the `trace_id`. This context can then be used to create a new span, establishing a proper parent-child relationship even across service boundaries..
+
+```python
+# starting a new span with the extracted context
+with tracer.start_as_current_span('format', context=ctx) as span:
+  hello_to = request.args.get('helloTo')
+  hello_str = f'Hello, {hello_to}!'
+  # adding an event to the span indicating that request for publishing has been completed
+  span.add_event('string-format-event', {'string-formatted': hello_str})
+  return hello_str
+```
+
+Make similar changes in `publisher.py`. Note that we are still using `start_as_current_span` for consistency. In this example it does not make much of a difference, but if the logic in the formatter and publisher was more involved, we could benefit from propagating the span through `contextvar`.
 
 ### Take It For a Spin
 
@@ -178,51 +186,30 @@ Then run the `hello.py`. You should see the outputs like this:
 ```
 # client
 $ python -m lesson03.exercise.hello Bryan
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x110844f50>[app_name=hello-world]
-Starting new HTTP connection (1): localhost
-http://localhost:8081 "GET /format?helloTo=Bryan HTTP/1.1" 200 13
-Reporting span f9c08d60e0dacb08:940d4ec91522f609:f9c08d60e0dacb08:1 hello-world.format
-Starting new HTTP connection (1): localhost
-http://localhost:8082 "GET /publish?helloStr=Hello%2C+Bryan%21 HTTP/1.1" 200 9
-Reporting span f9c08d60e0dacb08:a9df5f5c83588207:f9c08d60e0dacb08:1 hello-world.println
-Reporting span f9c08d60e0dacb08:f9c08d60e0dacb08:0:1 hello-world.say-hello
+SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0x71622dde498452bf, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0xec2ed31df84af745, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0xa9eca7f71c4503c9, trace_flags=0x01, trace_state=[], is_remote=False)
 
 # formatter
 $ python -m lesson03.exercise.formatter
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x107f97e90>[app_name=formatter]
- * Running on http://127.0.0.1:8081/ (Press CTRL+C to quit)
-Reporting span f9c08d60e0dacb08:940d4ec91522f609:f9c08d60e0dacb08:1 formatter.format
-127.0.0.1 - - [28/Sep/2017 23:22:43] "GET /format?helloTo=Bryan HTTP/1.1" 200 -
+SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0x9916e13b104e0d98, trace_flags=0x01, trace_state=[], is_remote=False)
+127.0.0.1 - - [13/Jul/2024 14:04:06] "GET /format?helloTo=Brian HTTP/1.1" 200 -
 
 # publisher
 $ python -m lesson03.exercise.publisher
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x1079f5e90>[app_name=publisher]
- * Running on http://127.0.0.1:8082/ (Press CTRL+C to quit)
-Hello, Bryan!
-Reporting span f9c08d60e0dacb08:a9df5f5c83588207:f9c08d60e0dacb08:1 publisher.publish
-127.0.0.1 - - [28/Sep/2017 23:22:43] "GET /publish?helloStr=Hello%2C+Bryan%21 HTTP/1.1" 200 -
+Hello, Brian!
+SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0x829c711f0aba36f0, trace_flags=0x01, trace_state=[], is_remote=False)
+127.0.0.1 - - [13/Jul/2024 14:04:06] "GET /publish?helloStr=Hello,+Brian! HTTP/1.1" 200 -
 ```
 
-Note how all recorded spans show the same trace ID `f9c08d60e0dacb08`. This is a sign
-of correct instrumentation. It is also a very useful debugging approach when something
-is wrong with tracing. A typical error is to miss the context propagation somewhere,
-either in-process or inter-process, which results in different trace IDs and broken
-traces.
+Note how all recorded spans show the same trace ID `0xa34ebb660c015b11ee6b8ef058c653c9`. This is a sign of correct instrumentation. It is also a very useful debugging approach when something is wrong with tracing. A typical error is to miss the context propagation somewhere, either in-process or inter-process, which results in different trace IDs and broken traces.
 
 If we open this trace in the UI, we should see all five spans.
 
-![Trace](../../go/lesson03/trace.png)
+![Trace](trace.png)
 
 ## Conclusion
 
 The complete program can be found in the [solution](./solution) package.
 
 Next lesson: [Baggage](../lesson04).
-
-[semantic-conventions]: https://github.com/opentracing/specification/blob/master/semantic_conventions.md

@@ -21,135 +21,227 @@ cp lesson01/solution/*.py lesson02/exercise/
 
 ### Tracing individual functions
 
-In [Lesson 1](../lesson01) we wrote a program that creates a trace that consists of a single span.
-That single span combined two operations performed by the program, formatting the output string
-and printing it. Let's move those operations into standalone functions first:
+In [Lesson 1](../lesson01) we wrote a program that creates a trace that consists of a single span. That single span combined two operations performed by the program, formatting the output string and printing it. Let's move those operations into standalone functions first:
 
 ```python
-def say_hello(hello_to):
-    with tracer.start_span('say-hello') as span:
-        span.set_tag('hello-to', hello_to)
-        hello_str = format_string(span, hello_to)
-        print_hello(span, hello_str)
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider, Tracer, Span
 
-def format_string(span, hello_to):
-    hello_str = 'Hello, %s!' % hello_to
-    span.log_kv({'event': 'string-format', 'value': hello_str})
+def say_hello(hello_to: str):
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'say_hello' operation
+    span: Span = tracer.start_span('say_hello')
+    # setting an attribute on the span
+    span.set_attribute("hello-to", hello_to)
+    # calling the format_string function
+    hello_str = format_string(span, hello_to)
+    # calling the print_hello function
+    print_hello(span, hello_str)
+    print(span.get_span_context())
+    # ending the span so that it gets exported properly
+    span.end()
+
+def format_string(root_span: Span, hello_to: str):
+    hello_str = f'Hello, {hello_to}!'
+    # adding a log to the span indicating that 'string-format-event' event has occured
+    root_span.add_event('string-format-event', {'string-formatted': hello_str})
     return hello_str
 
-def print_hello(span, hello_str):
+def print_hello(root_span: Span, hello_str: str):
     print(hello_str)
-    span.log_kv({'event': 'println'})
+    # adding a log to the span indicating that 'print-event' event has occured
+    root_span.add_event('print-event', {'printed': True})
+
+def get_tracer(tracer_name: str):
+    # retrieve the global tracer provider
+    tracer_provider: TracerProvider = trace.get_tracer_provider()
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = tracer_provider.get_tracer(tracer_name)
+    return tracer
 ```
 
 Of course, this does not change the outcome. What we really want to do is to wrap each function into its own span.
 
-```python
-def format_string(root_span, hello_to):
-    with tracer.start_span('format') as span:
-        hello_str = 'Hello, %s!' % hello_to
-        span.log_kv({'event': 'string-format', 'value': hello_str})
-        return hello_str
+### Wrapping Each Function in Its Own Span
 
-def print_hello(root_span, hello_str):
-    with tracer.start_span('println') as span:
-        print(hello_str)
-        span.log_kv({'event': 'println'})
+To track the execution of individual functions as separate spans, we need start a new span in each of the functions:
+
+```python
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider, Tracer, Span
+
+def say_hello(hello_to: str):
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'say_hello' operation
+    span: Span = tracer.start_span('say_hello')
+    # setting an attribute on the span
+    span.set_attribute("hello-to", hello_to)
+    # calling the format_string function
+    hello_str = format_string(span, hello_to)
+    # calling the print_hello function
+    print_hello(span, hello_str)
+    print(span.get_span_context())
+    # ending the span so that it gets exported properly
+    span.end()
+
+def format_string(root_span: Span, hello_to: str):
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span
+    span: Span = tracer.start_span('format_string', context=None)
+    hello_str = f'Hello, {hello_to}!'
+    # adding a log to the span indicating that 'string-format-event' event has occured
+    span.add_event('string-format-event', {'string-formatted': hello_str})
+    print(span.get_span_context())
+    # ending the span so that it gets exported properly
+    span.end()
+    return hello_str
+
+def print_hello(root_span: Span, hello_str: str):
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'print_hello' operation
+    span: Span = tracer.start_span('print_hello', context=None)
+    print(hello_str)
+    # adding a log to the span indicating that 'print-event' event has occured
+    span.add_event('print-event', {'printed': True})
+    print(span.get_span_context())
+    # ending the span so that it gets exported properly
+    span.end()
 ```
 
 Let's run it:
 
 ```
-$ python -m lesson02.exercise.hello Bryan
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x10d0bcf10>[app_name=hello-world]
-Reporting span a5224a80cebaee4:a5224a80cebaee4:0:1 hello-world.format
-Hello, Bryan!
-Reporting span 947f0ad168b588aa:947f0ad168b588aa:0:1 hello-world.println
-Reporting span 7fe927d093e3e33c:7fe927d093e3e33c:0:1 hello-world.say-hello
+$ python -m lesson02.exercise.hello Brian
+SpanContext(trace_id=0x00dc1afbdfaea8186452a698f9dd89b7, span_id=0xb320525457294a17, trace_flags=0x01, trace_state=[], is_remote=False)
+Hello, brian!
+SpanContext(trace_id=0xcda81f03e785c65e86aabc2c6daf6cba, span_id=0x5a8fdbba85eaac25, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0xde14b9ad90eb7d2dc56c21a4c994a9bd, span_id=0x5ebff4f00cc98a23, trace_flags=0x01, trace_state=[], is_remote=False)
 ```
 
-We got three spans, but there is a problem here. The first hexadecimal segment of the output represents
-Jaeger trace ID, yet they are all different. If we search for those IDs in the UI each one will represent
-a standalone trace with a single span. That's not what we wanted!
+We got three spans, but there is a problem here. The `trace_id`s are all different. If we search for those IDs in the UI each one will represent a standalone trace with a single span. That's not what we wanted!
 
-What we really wanted was to establish causal relationship between the two new spans to the root
-span started in `main`. We can do that by passing an additional option to the `start_span`
-function:
+What we really wanted was to establish causal relationship between the two new spans to the root span started in `say_hello` function. We can do that by passing an additional option `context` which can be obtained from the `root_span`, to the `start_span` function:
 
 ```python
-def format_string(root_span, hello_to):
-    with tracer.start_span('format', child_of=root_span) as span:
-        hello_str = 'Hello, %s!' % hello_to
-        span.log_kv({'event': 'string-format', 'value': hello_str})
-        return hello_str
+from opentelemetry import trace
+from opentelemetry.sdk.trace import TracerProvider, Tracer, Span
+
+def say_hello(hello_to):
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'say_hello' operation
+    span: Span = tracer.start_span('say_hello')
+    # setting an attribute on the span
+    span.set_attribute("hello-to", hello_to)
+    # calling the format_string function with the root span
+    hello_str = format_string(span, hello_to)
+    # calling the print_hello function with the root span
+    print_hello(span, hello_str)
+    print(span.get_span_context())
+    # ending the span to ensure it gets exported properly
+    span.end()
+
+def format_string(root_span: Span, hello_to: str):
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # creating a new context with the root span
+    ctx = trace.set_span_in_context(span=root_span)
+    # starting a new span within context of the root span
+    span: Span = tracer.start_span('format_string', context=ctx)
+    hello_str = f'Hello, {hello_to}!'
+    # adding a log to the span indicating that 'string-format-event' event has occured
+    span.add_event('string-format-event', {'string-formatted': hello_str})
+    print(span.get_span_context())
+    # ending the span to ensure it gets exported properly
+    span.end()
+    return hello_str
+
+def print_hello(root_span: Span, hello_str: str):
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # creating a new context with the root span
+    ctx = trace.set_span_in_context(span=root_span)
+    # starting a new span within context of the root span
+    span: Span = tracer.start_span('print_hello', context=ctx)
+    print(hello_str)
+    # adding a log to the span indicating that 'print-event' event has occured
+    span.add_event('print-event', {'printed': True})
+    print(span.get_span_context())
+    # ending the span to ensure it gets exported properly
+    span.end()
 ```
-
-If we think of the trace as a directed acyclic graph where nodes are the spans and edges are
-the causal relationships between them, then the `child_of` option is used to create one such
-edge between `span` and `root_span`. In the API the edges are represented by `SpanReference` type
-that consists of a `SpanContext` and a label. The `SpanContext` represents an immutable, thread-safe
-portion of the span that can be used to establish references or to propagate it over the wire.
-The label, or `ReferenceType`, describes the nature of the relationship. `ChildOf` relationship
-means that the `root_span` has a logical dependency on the child `span` before `root_span` can
-complete its operation. Another standard reference type in OpenTracing is `FollowsFrom`, which
-means the `root_span` is the ancestor in the DAG, but it does not depend on the completion of the
-child span, for example if the child represents a best-effort, fire-and-forget cache write.
-
-If we modify the `print_hello` function accordingly and run the app, we'll see that all reported
-spans now belong to the same trace:
+If we modify the `format_string` and `print_hello` functions accordingly and run the app, we'll see that all reported spans now belong to the same trace(all the spans now have the same `trace_id`):
 
 ```
-$ python -m lesson02.exercise.hello Bryan
-Initializing Jaeger Tracer with UDP reporter
-Using sampler ConstSampler(True)
-opentracing.tracer initialized to <jaeger_client.tracer.Tracer object at 0x1049f4f10>[app_name=hello-world]
-Reporting span 8d7ec03b285a2401:9a9ce59c4112c038:8d7ec03b285a2401:1 hello-world.format
-Hello, Bryan!
-Reporting span 8d7ec03b285a2401:b67d23e2bebfe48c:8d7ec03b285a2401:1 hello-world.println
-Reporting span 8d7ec03b285a2401:8d7ec03b285a2401:0:1 hello-world.say-hello
+$ python -m lesson02.exercise.hello Brian
+SpanContext(trace_id=0x50870936626e47f99ea53d1ba3d7f86c, span_id=0x5f1a92ba9b3ca2bc, trace_flags=0x01, trace_state=[], is_remote=False)
+Hello, Brian!
+SpanContext(trace_id=0x50870936626e47f99ea53d1ba3d7f86c, span_id=0x3665366c75ca7bed, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0x50870936626e47f99ea53d1ba3d7f86c, span_id=0x715a6ab493209ca1, trace_flags=0x01, trace_state=[], is_remote=False)
 ```
-
-We can also see that instead of `0` in the 3rd position the first two reported spans display
-`8d7ec03b285a2401`, which is the ID of the root span. The root span is reported last because
-it is the last one to finish.
 
 If we find this trace in the UI, it will show a proper parent-child relationship between the spans.
 
 ### Propagate the in-process context
 
-You may have noticed one unpleasant side effect of our recent changes - we had to pass the Span object
-as the first argument to each function. Unlike Go, languages like Java and Python support thread-local
-storage, which is convenient for storing such request-scoped data like the current span. As of v2 the OpenTracing API for Python supports a standard mechanism for passing and accessing the current span using the concepts of Scope Manager and Scope, which are using either plain thread-local storage or more specific mechanisms provided by various async frameworks like `tornado` or `gevent`. 
+If we think of a trace as a directed acyclic graph where nodes are the spans and edges are the causal relationships between them. In OpenTelemetry, relationships between spans are implicitly handled through the context, with the parent-child relationship being the default when creating a new span within the context of an existing span. This means that the `root_span` has a logical dependency on the child span before the `root_span` can complete its operation.
 
-Instead of calling `start_span` on the tracer, we can call `start_active_span` that invokes that mechanism and makes the span "active" and accessible via `tracer.active_span`. The return value of the `start_active_span` is a `Scope` object that needs to be closed in order to restore the previously active span on the stack.
+You may have noticed that we had to pass the `Span` object as the first argument to each function. This can be cumbersome and error-prone. Unlike Go, languages like Java and Python support thread-local storage, which is convenient for storing request-scoped data like the current span.
+
+In Python, the `contextvars` module allows for managing context in asynchronous environments. OpenTelemetry leverages this to maintain context across asynchronous calls. This means that you don't need to manually pass the span object through every function. Instead, the current span is stored in a context variable, and OpenTelemetry ensures that this context is correctly propagated across function calls, threads, and asynchronous tasks. This makes your code cleaner and reduces the likelihood of errors related to context propagation. Also using `contextvars` module helps maintain backwards compatibility, as you do not need to change function signatures just to instrument your application. This means you can add tracing to your existing codebase without significant modifications, preserving the original structure and behavior of your functions.
+
+Instead of calling the `tracer.start_span` function directly, we can utilize the `start_as_current_span` method of the `tracer`. This method makes activates the span and makes it accessible via the `trace.get_current_span` function. Typically used within a `with` statement, `start_as_current_span` function ensures that the span is automatically ended and the previous span is restored when the block exits. Any function called within this `with` block that creates a new span will have the active root context available, allowing the new span to automatically become a child of the active span.
 
 ```python
 def say_hello(hello_to):
-    with tracer.start_active_span('say-hello') as scope:
-        scope.span.set_tag('hello-to', hello_to)
+    # obtain a tracer instance
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'say_hello' operation
+    with tracer.start_as_current_span('say_hello') as span:
+        # setting an attribute on the span
+        span.set_attribute("hello-to", hello_to)
+        # calling the format_string function
         hello_str = format_string(hello_to)
+        # calling the print_hello function
         print_hello(hello_str)
+        print(span.get_span_context())
 ```
 
-Notice that we're no longer passing the span as argument to the functions, because they can now
-retrieve the span with `tracer.active_span` function. However, because creating a child span of a currently active span is such a common pattern, this now happens automatically, so that we do not need to pass the `child_of` reference to the parent span anymore:
+Notice that we're no longer passing the span as an argument to the functions because the functions are being called within a context manager. Creating a child span of a currently active span is a common pattern in OpenTelemetry and happens automatically. Therefore, we do not need to explicitly pass the optional `context` parameter of the currently active root span to the `tracer.start_as_current_span` function, the OpenTelemetry SDK automatically fetches the current active context if one exists.
 
 ```python
+
+ # creating a new context with the root span
+    ctx = trace.set_span_in_context(span=root_span)
+    # starting a new span within context of the root span
+    span: Span = tracer.start_span('print_hello', context=ctx)
 def format_string(hello_to):
-    with tracer.start_active_span('format') as scope:
-        hello_str = 'Hello, %s!' % hello_to
-        scope.span.log_kv({'event': 'string-format', 'value': hello_str})
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'format_string' operation
+    with tracer.start_as_current_span('format_string') as span:
+        hello_str = f'Hello, {hello_to}!'
+        # adding a log to the span indicating that 'string-format-event' event has occured
+        span.add_event('string-format-event', {'string-formatted': hello_str})
+        print(span.get_span_context())
         return hello_str
 
 def print_hello(hello_str):
-    with tracer.start_active_span('println') as scope:
+    # obtain a tracer instance from the tracer provider
+    tracer: Tracer = get_tracer("say_hello_tracer")
+    # starting a new span for the 'print_hello' operation
+    with tracer.start_as_current_span('print_hello') as span:
         print(hello_str)
-        scope.span.log_kv({'event': 'println'})
+        # adding a log to the span indicating that 'print-event' event has occured
+        span.add_event('print-event', {'printed': True})
+        print(span.get_span_context())
 ```
 
-Note that because `start_active_span` function returns a `Scope` instead of a `Span`, we use `scope.span` property to access the span when we want to annotate it with tags or logs. We could also use `tracer.active_span` property with the same effect.
+Note that because the `start_as_current_span` method is used within a `with` statement, we access the span directly within the block. To annotate it with attributes or events, we use the span instance available in the with block.
 
 If we run this modified program, we will see that all three reported spans still have the same trace ID.
 
