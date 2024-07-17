@@ -51,9 +51,11 @@ To get started with Jaeger using Docker and the default in-memory storage, follo
 * Once the backend starts, the Jaeger UI will be accessible at http://localhost:16686.
 
 
-docker run -d --name jaeger -e COLLECTOR_OTLP_ENABLED=true -p 16686:16686 -p 4318:4318 jaegertracing/all-in-one:latest
+## Contributions
+My main goal was to keep this tutorial as close as possible to the original. Please send me your suggestions and feedback for improving it. I would encourage you to send me pull requests for other languages such as Java, Node.js, and C#. 
 
 ---
+### original
 ---
 
 # OpenTracing Tutorials
