@@ -6,6 +6,7 @@ This repository is a fork of the original [opentracing-tutorial](https://github.
 
 - [x] [Go tutorial](./go/)
 - [x] [Python tutorial](./python)
+- [x] [Rust tutorial](./rust)
 - [ ] Node.js tutorial
 - [ ] Java tutorial
 - [ ] C# tutorial
@@ -52,7 +53,7 @@ To get started with Jaeger using Docker and the default in-memory storage, follo
 
 
 ## Contributions
-My main goal was to keep this tutorial as close as possible to the original. Please send me your suggestions and feedback for improving it. I would encourage you to send me pull requests for other languages such as Java, Node.js, and C#. 
+My main goal was to keep this tutorial as close as possible to the original. Please send me your suggestions and feedback for improving it. I would encourage you to send me pull requests for other languages such as Java, Node.js, and C#. I would also greatly appreciate pull requests on updating the existing tutorials.  
 
 ---
 ### original

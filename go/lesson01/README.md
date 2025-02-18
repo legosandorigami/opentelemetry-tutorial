@@ -33,7 +33,7 @@ func main() {
 ```
 
 Run it:
-```
+``` bash
 $ go run ./lesson01/hello.go Bryan
 Hello, Bryan!
 ```
