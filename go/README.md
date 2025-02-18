@@ -1,4 +1,4 @@
-# OpenTracing Tutorial - Go
+# OpenTelemetry Tutorial - Go
 
 ## Installing
 

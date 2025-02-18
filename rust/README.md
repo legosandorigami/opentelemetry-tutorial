@@ -1,4 +1,4 @@
-# OpenTelemetry Tutorial - Python
+# OpenTelemetry Tutorial - Rust
 
 ## Installing
 
@@ -9,19 +9,6 @@ These tutorials can be followed using any following tracing backends:
 
 Refer to this [guide](../README.md) to learn how to set up and run any of the above tracing backends.
 
-This repository uses `pip` to manage dependencies. To install all dependencies, run:
-
-* Navigate to the tutorial directory:
-  ```
-  cd opentelemetry-tutorial/python
-  ```
-* Activate your virtual environment.
-* Install the required dependencies:
-  ```
-  pip install -r requirements.txt
-  ```
-
-All subsequent commands in the tutorials should be executed relative to this `python` directory.
 
 ## Lessons
 
@@ -35,7 +22,7 @@ All subsequent commands in the tutorials should be executed relative to this `py
   * Propagate the in-process context
 * [Lesson 03 - Tracing RPC Requests](./lesson03)
   * Trace a transaction across more than one microservice
-  * Pass the context between processes using `Inject` and `Extract`
+  * Pass the context between processes using `inject_context` and `extract`
   * Apply OpenTracing-recommended tags
 * [Lesson 04 - Baggage](./lesson04)
   * Understand distributed context propagation
