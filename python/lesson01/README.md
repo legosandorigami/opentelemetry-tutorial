@@ -14,7 +14,7 @@ Learn how to:
 
 Let's create a simple Python program `lesson01/exercise/hello.py` that takes an argument and prints "Hello, {arg}!".
 
-```
+```bash
 mkdir lesson01/exercise
 touch lesson01/exercise/__init__.py
 ```
@@ -38,7 +38,7 @@ if __name__ == '__main__':
 ```
 
 Run it:
-```
+```bash
 $ python -m lesson01.exercise.hello Bryan
 Hello, Bryan!
 ```
@@ -161,7 +161,7 @@ tracer_provider.shutdown()
 
 If we run the program now, we should see a span logged:
 
-```
+```bash
 $ python -m lesson01.exercise.hello Brian
 Hello, Brian!
 SpanContext(trace_id=0x3adc967f6daf923b3816df562b93da5d, span_id=0x34a859ed99f6dd5d, trace_flags=0x01, trace_state=[], is_remote=False)

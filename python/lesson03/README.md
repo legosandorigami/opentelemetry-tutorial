@@ -23,7 +23,7 @@ The package is organized as follows:
 
 To test it out, run the formatter and publisher services in separate terminals
 
-```
+```bash
 # terminal 2
 $ python -m lesson03.exercise.formatter
  * Running on http://127.0.0.1:8081/ (Press CTRL+C to quit)
@@ -35,14 +35,14 @@ $ python -m lesson03.exercise.publisher
 
 Execute an HTTP request against the formatter:
 
-```
+```bash
 $ curl 'http://localhost:8081/format?helloTo=Bryan'
-Hello, Bryan!%
+Hello, Bryan!
 ```
 
 Execute and HTTP request against the publisher:
 
-```
+```bash
 $ curl 'http://localhost:8082/publish?helloStr=hi%20there'
 published
 ```
@@ -51,7 +51,7 @@ The publisher stdout will show `"hi there"`.
 
 Finally, if we run the client app as we did in the previous lessons:
 
-```
+```bash
 $ python -m lesson03.exercise.hello Bryan
 SpanContext(trace_id=0x8993d6ee03c04f6c2ffa4a306c617745, span_id=0xfa46b40e24df5ddd, trace_flags=0x01, trace_state=[], is_remote=False)
 SpanContext(trace_id=0x8993d6ee03c04f6c2ffa4a306c617745, span_id=0x1312413b94ceb08a, trace_flags=0x01, trace_state=[], is_remote=False)
@@ -183,30 +183,31 @@ Make similar changes in `publisher.py`. Note that we are still using `start_as_c
 As before, first run the `formatter` and `publisher` apps in separate terminals.
 Then run the `hello.py`. You should see the outputs like this:
 
-```
+```bash
 # client
 $ python -m lesson03.exercise.hello Bryan
-SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0x71622dde498452bf, trace_flags=0x01, trace_state=[], is_remote=False)
-SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0xec2ed31df84af745, trace_flags=0x01, trace_state=[], is_remote=False)
-SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0xa9eca7f71c4503c9, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0x07d8373728e54465bd50a53f5423a86e, span_id=0x2dd3ca6944aae42e, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0x07d8373728e54465bd50a53f5423a86e, span_id=0xbf99738583110646, trace_flags=0x01, trace_state=[], is_remote=False)
+SpanContext(trace_id=0x07d8373728e54465bd50a53f5423a86e, span_id=0x32ada1614a250df2, trace_flags=0x01, trace_state=[], is_remote=False)
 
 # formatter
 $ python -m lesson03.exercise.formatter
-SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0x9916e13b104e0d98, trace_flags=0x01, trace_state=[], is_remote=False)
-127.0.0.1 - - [13/Jul/2024 14:04:06] "GET /format?helloTo=Brian HTTP/1.1" 200 -
+SpanContext(trace_id=0x07d8373728e54465bd50a53f5423a86e, span_id=0x6772c62a2b4939b6, trace_flags=0x01, trace_state=[], is_remote=False)
+127.0.0.1 - - [13/Mar/2025 20:57:11] "GET /format?helloTo=Bryan HTTP/1.1" 200 -
 
 # publisher
 $ python -m lesson03.exercise.publisher
-Hello, Brian!
-SpanContext(trace_id=0xa34ebb660c015b11ee6b8ef058c653c9, span_id=0x829c711f0aba36f0, trace_flags=0x01, trace_state=[], is_remote=False)
-127.0.0.1 - - [13/Jul/2024 14:04:06] "GET /publish?helloStr=Hello,+Brian! HTTP/1.1" 200 -
+Hello, Bryan!
+SpanContext(trace_id=0x07d8373728e54465bd50a53f5423a86e, span_id=0xb9faabce5087dfb8, trace_flags=0x01, trace_state=[], is_remote=False)
+127.0.0.1 - - [13/Mar/2025 20:57:11] "GET /publish?helloStr=Hello,+Bryan! HTTP/1.1" 200 -
 ```
 
-Note how all recorded spans show the same trace ID `0xa34ebb660c015b11ee6b8ef058c653c9`. This is a sign of correct instrumentation. It is also a very useful debugging approach when something is wrong with tracing. A typical error is to miss the context propagation somewhere, either in-process or inter-process, which results in different trace IDs and broken traces.
+Note how all recorded spans show the same trace ID `0x07d8373728e54465bd50a53f5423a86e`. This is a sign of correct instrumentation. It is also a very useful debugging approach when something is wrong with tracing. A typical error is to miss the context propagation somewhere, either in-process or inter-process, which results in different trace IDs and broken traces.
 
 If we open this trace in the UI, we should see all five spans.
 
 ![Trace](trace.png)
+![Spans](spans.png)
 
 ## Conclusion
 

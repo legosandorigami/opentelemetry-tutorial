@@ -11,7 +11,7 @@ In Lesson 3 we have seen how span context is propagated over the wire between di
 
 To see how it works in OpenTelemetry, let's take the application we built in Lesson 3. You can copy the source code from [../lesson03/solution](../lesson03/solution) package:
 
-```
+```bash
 mkdir lesson04/exercise
 cp -r lesson03/solution/*py lesson04/exercise/
 ```
@@ -125,7 +125,7 @@ with tracer.start_as_current_span('format', context=trace_ctx) as span:
 
 As in Lesson 3, first start the `formatter` and `publisher` in separate terminals, then run the client with two arguments, e.g. `Bryan Bonjour`. The `publisher` should print `Bonjour, Bryan!`.
 
-```
+```bash
 # client
 $ python -m lesson04.exercise.hello Brian Bonjour
 SpanContext(trace_id=0xee3ac40657648e0731bc66d31df8136f, span_id=0x04c15f877782773f, trace_flags=0x01, trace_state=[], is_remote=False)

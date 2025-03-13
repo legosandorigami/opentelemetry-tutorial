@@ -13,7 +13,7 @@ Learn how to:
 First, copy your work or the official solution from [Lesson 1](../lesson01) to `lesson02/exercise/hello.py`,
 and make it a module by creating the `__init__.py` file:
 
-```
+```bash
 mkdir lesson02/exercise
 touch lesson02/exercise/__init__.py
 cp lesson01/solution/*.py lesson02/exercise/
@@ -114,7 +114,7 @@ def print_hello(root_span: Span, hello_str: str):
 
 Let's run it:
 
-```
+```bash
 $ python -m lesson02.exercise.hello Brian
 SpanContext(trace_id=0x00dc1afbdfaea8186452a698f9dd89b7, span_id=0xb320525457294a17, trace_flags=0x01, trace_state=[], is_remote=False)
 Hello, brian!
@@ -176,7 +176,7 @@ def print_hello(root_span: Span, hello_str: str):
 ```
 If we modify the `format_string` and `print_hello` functions accordingly and run the app, we'll see that all reported spans now belong to the same trace(all the spans now have the same `trace_id`):
 
-```
+```bash
 $ python -m lesson02.exercise.hello Brian
 SpanContext(trace_id=0x50870936626e47f99ea53d1ba3d7f86c, span_id=0x5f1a92ba9b3ca2bc, trace_flags=0x01, trace_state=[], is_remote=False)
 Hello, Brian!
