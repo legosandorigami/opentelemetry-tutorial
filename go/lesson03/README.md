@@ -24,21 +24,21 @@ The package is organized as follows:
 
 To test it out, run the formatter and publisher services in separate terminals
 
-```
+```bash
 $ go run ./lesson03/exercise/formatter/formatter.go
 $ go run ./lesson03/exercise/publisher/publisher.go
 ```
 
 Execute an HTTP request against the formatter:
 
-```
+```bash
 $ curl 'http://localhost:8081/format?helloTo=Bryan'
-Hello, Bryan!%
+Hello, Bryan!
 ```
 
 Execute and HTTP request against the publisher:
 
-```
+```bash
 $ curl 'http://localhost:8082/publish?helloStr=hi%20there'
 ```
 
@@ -46,11 +46,11 @@ Note that there will be no output from `curl`, but the publisher stdout will sho
 
 Finally, if we run the client app as we did in the previous lessons:
 
-```
+```bash
 $ go run ./lesson03/exercise/client/hello.go Brian
-2024/07/09 10:00:22 {"TraceID":"fb033fb337a905d2ac22019747e40107","SpanID":"8e4f9b302377f59c","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/09 10:00:22 {"TraceID":"fb033fb337a905d2ac22019747e40107","SpanID":"71c19af4405b3c1e","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/09 10:00:22 {"TraceID":"fb033fb337a905d2ac22019747e40107","SpanID":"7126ebaabb4434a5","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:38:34 {"TraceID":"4a93e813b625a64b3762be91060b19bf","SpanID":"a22225246e18aa3b","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:38:34 {"TraceID":"4a93e813b625a64b3762be91060b19bf","SpanID":"ceb20f50d2909f0f","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:38:34 {"TraceID":"4a93e813b625a64b3762be91060b19bf","SpanID":"842488f37e7a1eac","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
 We will see the publisher printing the line `"Hello, Brian!"`.
@@ -225,21 +225,21 @@ We need to update the `Publisher` service similarly.
 
 As before, first run the `formatter` and `publisher` apps in separate terminals. Then run the `client/hello.go`. You should see the outputs like this:
 
-```
+```bash
 # client
 $ go run ./lesson03/exercise/client/hello.go Brian
-2024/07/10 04:45:22 {"TraceID":"4c817276fdd595aa3ef9cd1d320dc37f","SpanID":"41b8662f7d8ca253","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/10 04:45:22 {"TraceID":"4c817276fdd595aa3ef9cd1d320dc37f","SpanID":"4a68e973750f123a","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/10 04:45:22 {"TraceID":"4c817276fdd595aa3ef9cd1d320dc37f","SpanID":"249fe56f54d4d0da","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:44:50 {"TraceID":"d19175660583032b22b169ea48aebccc","SpanID":"80d81967cd07e68d","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:44:50 {"TraceID":"d19175660583032b22b169ea48aebccc","SpanID":"aaae4c27c31db753","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:44:50 {"TraceID":"d19175660583032b22b169ea48aebccc","SpanID":"2541424024192fcc","TraceFlags":"01","TraceState":"","Remote":false}
 
 # formatter
 $ go run ./lesson03/exercise/formatter/formatter.go
-2024/07/10 04:45:22 {"TraceID":"4c817276fdd595aa3ef9cd1d320dc37f","SpanID":"be423b7c9d541183","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:44:50 {"TraceID":"d19175660583032b22b169ea48aebccc","SpanID":"cbec81a83dc9c309","TraceFlags":"01","TraceState":"","Remote":false}
 
 # publisher
 $ go run ./lesson03/exercise/publisher/publisher.go
 Hello, Brian!
-2024/07/10 04:45:22 {"TraceID":"4c817276fdd595aa3ef9cd1d320dc37f","SpanID":"5ee2c9e49d05764c","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:44:50 {"TraceID":"d19175660583032b22b169ea48aebccc","SpanID":"e62fade3a5a8512a","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
 Note how all recorded spans show the same `TraceID`. This is a sign of correct instrumentation. It is also a very useful debugging approach when something is wrong with tracing. A typical error is to miss the context propagation somwehere, either in-process or inter-process, which results in different trace IDs and broken traces.
@@ -247,6 +247,7 @@ Note how all recorded spans show the same `TraceID`. This is a sign of correct i
 If we open this trace in the UI, we should see all five spans.
 
 ![Trace](trace.png)
+![Spans](spans.png)
 
 ## Conclusion
 

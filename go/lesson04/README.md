@@ -11,7 +11,7 @@ In Lesson 3 we have seen how span context is propagated over the wire between di
 
 To see how it works in OpenTracing, let's take the application we built in Lesson 3. You can copy the source code from [../lesson03/solution](../lesson03/solution) package:
 
-```
+```bash
 cp -r ./lesson03/solution ./lesson04/exercise
 ```
 
@@ -99,21 +99,21 @@ helloStr := fmt.Sprintf("%s, %s!", greeting, helloTo)
 
 As in Lesson 3, first start the `formatter` and `publisher` in separate terminals, then run the client with two arguments, e.g. `hello.go Brian Bonjour`. The `publisher` should print `Bonjour, Bryan!`.
 
-```
+```bash
 # client
 $ go run ./lesson04/exercise/client/hello.go Brian Bonjour
-2024/07/10 06:43:09 {"TraceID":"23eedf17aa7bb04365fdc8f547506020","SpanID":"edc33bfde1463ab1","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/10 06:43:09 {"TraceID":"23eedf17aa7bb04365fdc8f547506020","SpanID":"4304752b376af649","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/10 06:43:09 {"TraceID":"23eedf17aa7bb04365fdc8f547506020","SpanID":"f58f0e0e90ad64dd","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:54:15 {"TraceID":"a1d6dc3fd1c52c024c4de8ab4154bd10","SpanID":"28ba049644c12fe1","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:54:15 {"TraceID":"a1d6dc3fd1c52c024c4de8ab4154bd10","SpanID":"fcaef19133003d22","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:54:15 {"TraceID":"a1d6dc3fd1c52c024c4de8ab4154bd10","SpanID":"8351dd7f319787d2","TraceFlags":"01","TraceState":"","Remote":false}
 
 # formatter
 $ go run ./lesson04/exercise/formatter/formatter.go
-2024/07/10 06:43:09 {"TraceID":"23eedf17aa7bb04365fdc8f547506020","SpanID":"74fa41b1a45abfb5","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:54:15 {"TraceID":"a1d6dc3fd1c52c024c4de8ab4154bd10","SpanID":"24a98f8b94a304d5","TraceFlags":"01","TraceState":"","Remote":false}
 
 # publisher
 $ go run ./lesson04/exercise/publisher/publisher.go
 Hello, Brian!
-2024/07/10 06:43:09 {"TraceID":"23eedf17aa7bb04365fdc8f547506020","SpanID":"6f42754d0ce18d58","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:54:15 {"TraceID":"a1d6dc3fd1c52c024c4de8ab4154bd10","SpanID":"0fa5b79c6ed01a8e","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
 We see `Hello, Brian!` instead of `Bonjour, Brian!`. That is because the baggage has not been propagated. We set the global propagator to an instance of `propagation.TraceContext` in the function `InitTracerProvider` of our helper library. We need to use a composite propagator that can also propagate the baggage in addition to the trace context. Let's update the `InitTracerProvider` function in our helper library in the file `./lib/tracing/init.go`:
@@ -129,21 +129,21 @@ We see `Hello, Brian!` instead of `Bonjour, Brian!`. That is because the baggage
 ```
 Now let's re-run the application:
 
-```
+```bash
 # client
 $ go run ./lesson04/exercise/client/hello.go Brian Bonjour
-2024/07/10 06:56:31 {"TraceID":"2248fae14340f8de654ccda4922eb387","SpanID":"e72c1416ab8878d5","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/10 06:56:31 {"TraceID":"2248fae14340f8de654ccda4922eb387","SpanID":"35970ed77a9e1516","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/10 06:56:31 {"TraceID":"2248fae14340f8de654ccda4922eb387","SpanID":"7fc831a8b2352a99","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:56:20 {"TraceID":"6ab269227ecab611e60eaab3a3776a9a","SpanID":"c9794aea170c88e9","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:56:20 {"TraceID":"6ab269227ecab611e60eaab3a3776a9a","SpanID":"1604a06c596c8af0","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:56:20 {"TraceID":"6ab269227ecab611e60eaab3a3776a9a","SpanID":"cba9a56b5b6ac230","TraceFlags":"01","TraceState":"","Remote":false}
 
 # formatter
 $ go run ./lesson04/exercise/formatter/formatter.go
-2024/07/10 06:56:31 {"TraceID":"2248fae14340f8de654ccda4922eb387","SpanID":"5f699357c80af5ed","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:56:20 {"TraceID":"6ab269227ecab611e60eaab3a3776a9a","SpanID":"0d31673103179c85","TraceFlags":"01","TraceState":"","Remote":false}
 
 # publisher
 $ go run ./lesson04/exercise/publisher/publisher.go
 Bonjour, Brian!
-2024/07/10 06:56:31 {"TraceID":"2248fae14340f8de654ccda4922eb387","SpanID":"a3d920d82d1e42d9","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:56:20 {"TraceID":"6ab269227ecab611e60eaab3a3776a9a","SpanID":"86370b05b70bcf64","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
 ### What's the Big Deal?

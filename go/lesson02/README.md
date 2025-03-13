@@ -118,7 +118,7 @@ printHello(context.Background(), helloStr)
 
 Let's run it:
 
-```
+```bash
 $ go run ./lesson02/exercise/hello.go Brian
 2024/07/09 06:24:45 {"TraceID":"6c69832347b64cc1332d7aa6de1dcafb","SpanID":"b5a6927b2d576cdc","TraceFlags":"01","TraceState":"","Remote":false}
 Hello, Brian!
@@ -147,12 +147,12 @@ printHello(ctx, helloStr)
 
 On running the app, we'll see that all reported spans now belong to the same trace:
 
-```
+```bash
 $ go run ./lesson02/exercise/hello.go Brian
-2024/07/09 06:29:02 {"TraceID":"d4631a54c578fd7644512d66e904e0c5","SpanID":"2597d8c8c39dc7f8","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:30:09 {"TraceID":"f11f0ff6ed592ed8d47231075f8035b3","SpanID":"3e122881a1ecd8b8","TraceFlags":"01","TraceState":"","Remote":false}
 Hello, Brian!
-2024/07/09 06:29:02 {"TraceID":"d4631a54c578fd7644512d66e904e0c5","SpanID":"8c37823820606d06","TraceFlags":"01","TraceState":"","Remote":false}
-2024/07/09 06:29:02 {"TraceID":"d4631a54c578fd7644512d66e904e0c5","SpanID":"2ed001eeb94e4653","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:30:09 {"TraceID":"f11f0ff6ed592ed8d47231075f8035b3","SpanID":"2d421d3b86b5e1dd","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:30:09 {"TraceID":"f11f0ff6ed592ed8d47231075f8035b3","SpanID":"771421ad4f086397","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
 If we find this trace in the UI, it will show a proper parent-child relationship between the spans.

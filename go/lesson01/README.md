@@ -12,7 +12,7 @@ Learn how to:
 
 ### A simple Hello-World program
 
-Let's create a simple Go program `lesson01/hello.go` that takes an argument and prints "Hello, {arg}!".
+Let's create a simple Go program `lesson01/exercise/hello.go` that takes an argument and prints "Hello, {arg}!".
 
 ```go
 package main
@@ -34,7 +34,7 @@ func main() {
 
 Run it:
 ``` bash
-$ go run ./lesson01/hello.go Bryan
+$ go run ./lesson01/exercise/hello.go Bryan
 Hello, Bryan!
 ```
 
@@ -82,8 +82,9 @@ import (
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
 	"go.opentelemetry.io/otel/propagation"
 	"go.opentelemetry.io/otel/sdk/resource"
-	"go.opentelemetry.io/otel/sdk/trace"
+	traceSdk "go.opentelemetry.io/otel/sdk/trace"
 	semconv "go.opentelemetry.io/otel/semconv/v1.4.0"
+	"go.opentelemetry.io/otel/trace"
 )
 
 const (
@@ -109,9 +110,12 @@ func InitTracerProviderWithBackend(service, backend string) (*traceSdk.TracerPro
 	res, err := resource.New(
 		context.Background(),
 		resource.WithAttributes(
-			semconv.ServiceNameKey.String(service),        // service name
-			semconv.ServiceVersionKey.String("1.0.0"),     // version number of the application
-			attribute.String("environment", "production"), // environment
+			// adding service name
+			semconv.ServiceNameKey.String(service),
+			// adding version number of the application
+			semconv.ServiceVersionKey.String("1.0.0"),
+			// adding environment
+			attribute.String("environment", "production"),
 		),
 	)
 	if err != nil {
@@ -164,14 +168,14 @@ Note that we are passing a string `hello-world` to the init method. It is used t
 
 If we run the program now, we should see a span logged:
 
-```
-$ go run ./lesson01/hello.go Bryan
+```bash
+$ go run ./lesson01/exercise/hello.go Bryan
 2017/09/22 20:26:49 Initializing logging reporter
 Hello, Bryan!
-2024/07/08 07:28:27 {"TraceID":"bd2c9cce7e72c69de6d3770d333ef428","SpanID":"563fac0603904e34","TraceFlags":"01","TraceState":"","Remote":false}
+2025/03/13 19:22:09 {"TraceID":"99eae68a2e21e3ba24fe85aea81a92f7","SpanID":"0788b6b2c56e3f34","TraceFlags":"01","TraceState":"","Remote":false}
 ```
 
-If you have a backend(Signoz, Tempo and Grafana or Jaeger) running, you should be able to see the trace in the UI.
+If you have a backend(Jaeger, Tempo and Grafana or Signoz) running, you should be able to see the trace in the UI.
 
 ### Adding Attributes and Events to a span
 
